@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 filter_drives() {
    drives=$(grep -vE '(dm-[0-9]+)|(zram[0-9]+)' -)
