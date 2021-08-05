@@ -1,0 +1,95 @@
+#!/bin/bash
+
+filter_drives() {
+   drives=$(grep -vE '(dm-[0-9]+)|(zram[0-9]+)' -)
+   for drive in ${drives}; do
+      path="/sys/class/block/${drive}"
+      ls ${path}/${drive}* >/dev/null 2>/dev/null && continue
+      echo "${drive}"
+   done
+}
+
+# Secret Drive
+drives=$(ls /sys/class/block | grep -vE '(dm-[0-9]+)|(zram[0-9]+)' | filter_drives)
+echo "Please select the secret drive."
+select SECRET_DRIVE in ${drives}; do
+   break
+done
+
+[ -z "${SECRET_DRIVE}" ] && exit 1
+
+# Secret Mapper Name
+printf "Name for the device mapper (default secret): "
+read SECRET_NAME
+[ -z "${SECRET_NAME}" ] && SECRET_NAME="secret"
+
+# Secret Mount Point
+printf "Mount point (default /mnt/secret): "
+read SECRET_MOUNT
+[ -z "${SECRET_MOUNT}" ] && SECRET_MOUNT="/mnt/secret"
+
+# Key partition
+printf "Please insert the key and press enter: "
+read
+
+while true; do
+   echo "Please select the key drive"
+   drives="$(echo "${drives}" | grep -v "${SECRET_DRIVE}")"
+   select KEY_DRIVE in ${drives}; do
+      break
+   done
+   if [ $(cat "/sys/class/block/${KEY_DRIVE}/size") -gt 1048576 ]; then
+      echo "The key drive must be less than or equal to 1MiB in size."
+   elif [ "$(sudo file -sb "/dev/${KEY_DRIVE}")" != "data" ]; then
+      echo "The key drive must contain the key without a file system."
+   else
+      break
+   fi
+done
+
+[ -z "${KEY_DRIVE}" ] && exit 1
+
+# PARTUUID of Key partition
+KEY_UUID=$(sudo lsblk -lno PARTUUID "/dev/${KEY_DRIVE}")
+[ -z "${KEY_UUID}" ] && echo "Failed to get PARTUUID of ${KEY_DRIVE}" && exit 1
+
+echo
+echo "Secret drive:         ${SECRET_DRIVE}"
+echo "Secret device mapper: ${SECRET_NAME}"
+echo "Secret mount point:   ${SECRET_MOUNT}"
+echo "Key drive:            ${KEY_DRIVE}"
+echo "Key PARTUUID:         ${KEY_UUID}"
+echo
+printf "Do you want to continue [y]: "
+read confirmation
+[ -z "${confirmation}" -o "${confirmation}" = "y" ] || exit 1
+
+if ! cp secret.sh secret; then
+   echo "Failed to copy secret.sh to secret"
+   exit 1
+fi
+
+if ! chmod +x secret; then
+   echo "Failed to chmod +x secret"
+   rm -f secret
+   exit 1
+fi
+
+# fix for sed
+SECRET_MOUNT="$(echo "${SECRET_MOUNT}" | sed 's/\//\\\//g')"
+
+sed -i \
+-e "s/#SECRET_DRIVE/SECRET_DRIVE=\/dev\/${SECRET_DRIVE}/" \
+-e "s/#SECRET_NAME/SECRET_NAME=${SECRET_NAME}/"    \
+-e "s/#SECRET_MOUNT/SECRET_MOUNT=${SECRET_MOUNT}/" \
+-e "s/#PARTUUID/PARTUUID=${KEY_UUID}/"             \
+-e '/die \"please configure with .\/configure/d'   \
+secret
+if [ $? -eq 0 ]; then
+   echo "Successfully configured the secret daemon."
+else
+   echo "Failed to patch."
+   rm -f secret
+   exit 1
+fi
+
