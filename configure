@@ -49,7 +49,7 @@ done
 
 [ -z "${KEY_DRIVE}" ] && exit 1
 
-# PARTUUID of Key partition
+# PARTUUID of key partition
 KEY_UUID=$(sudo lsblk -lno PARTUUID "/dev/${KEY_DRIVE}")
 [ -z "${KEY_UUID}" ] && echo "Failed to get PARTUUID of ${KEY_DRIVE}" && exit 1
 
@@ -64,32 +64,35 @@ printf "Do you want to continue [y]: "
 read confirmation
 [ -z "${confirmation}" -o "${confirmation}" = "y" ] || exit 1
 
-if ! cp secret.sh secret; then
-   echo "Failed to copy secret.sh to secret"
+file="secret-daemon"
+
+if ! cp secret.sh "${file}" ; then
+   echo "Failed to copy secret.sh to ${file}"
    exit 1
 fi
 
-if ! chmod +x secret; then
-   echo "Failed to chmod +x secret"
-   rm -f secret
+if ! chmod +x "${file}"; then
+   echo "Failed to chmod +x ${file}"
+   rm -f "${file}"
    exit 1
 fi
 
 # fix for sed
 SECRET_MOUNT="$(echo "${SECRET_MOUNT}" | sed 's/\//\\\//g')"
 
+# Patch the daemon
 sed -i \
 -e "s/#SECRET_DRIVE/SECRET_DRIVE=\/dev\/${SECRET_DRIVE}/" \
 -e "s/#SECRET_NAME/SECRET_NAME=${SECRET_NAME}/"    \
 -e "s/#SECRET_MOUNT/SECRET_MOUNT=${SECRET_MOUNT}/" \
 -e "s/#PARTUUID/PARTUUID=${KEY_UUID}/"             \
 -e '/die \"please configure with .\/configure/d'   \
-secret
+"${file}"
 if [ $? -eq 0 ]; then
    echo "Successfully configured the secret daemon."
 else
    echo "Failed to patch."
-   rm -f secret
+   rm -f "${file}"
    exit 1
 fi
 
