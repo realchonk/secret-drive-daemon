@@ -26,3 +26,6 @@ Now you're setup and can configure the program itself.
 To setup the daemon just run ```./configure```.<br>
 Then copy the resulting ./secret-daemon to a directory in $PATH.<br>
 
+## See also
+https://wiki.archlinux.org/title/Dm-crypt/Device_encryption<br>
+https://gitlab.com/cryptsetup/cryptsetup/-/wikis/home
